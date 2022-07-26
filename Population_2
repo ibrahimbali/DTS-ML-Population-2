@@ -1,8 +1,17 @@
-#Mengimport Libraries
+#Instal Libraries yang dibutuhkan
+!pip install tensorflow
+!pip install keras
+
+#Import Librarie yang dibutuhkan
 import numpy as np # linear algebra
 import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 from matplotlib import pyplot as plt
 import datetime
+from keras.models import Sequential
+from keras.layers import Dense
+from numpy import asarray
+from sklearn.preprocessing import StandardScaler
+
 
 np.set_printoptions(suppress=True)
 
@@ -19,3 +28,153 @@ dataset.dtypes
 dataset.shape
 dataset.describe()
 dataset.columns
+
+#Plot data set antara Luas wilayah dan Kepadatan
+x = dataset['LUAS WILAYAH (KM2)']
+y = dataset['KEPADATAN (JIWA/KM2)']
+plt.plot(x, y,'.')
+plt.title("PLOT KEPADATAN PENDUDUK DAN LUAS WILAYAH")
+plt.xlabel("Luas Wilayah (km2)")
+plt.ylabel("Kepadatan (Jiwa/km2)")
+plt.show()
+
+#Plot data antara Banyak penduduk usia 35-39 Laki-laki dengan Kepadatan penduduk
+x = dataset['35-39 Laki-Laki']
+y = dataset['KEPADATAN (JIWA/KM2)']
+plt.plot(x, y,'.')
+plt.title("35-39 Laki-Laki DAN LUAS WILAYAH")
+plt.xlabel("Penduduk Laki-laki usia 35-39 tahun")
+plt.ylabel("Kepadatan (Jiwa/km2)")
+plt.show()
+
+#Membagi data menjadi testing dan training
+n = len(dataset['LUAS WILAYAH (KM2)']) # total baris
+# membangkitkan data 0 dan 1 sebanyak n kali dengan proporsi 80%,20%
+label = np.random.choice([1, 2], size=(n), p=[0.8,0.2]) 
+
+#Menentukan variabel X dan Y
+
+df_train = dataset.loc[label==1,]
+df_test =dataset.loc[label==2,]
+
+kolom_X = ['KEPADATAN (JIWA/KM2)','35-39 Laki-Laki',
+       '35-39 Perempuan', '40-44 Laki-Laki', '40-44 Perempuan',
+       '45-49 Laki-Laki', '45-49 Perempuan', '50-54 Laki-Laki',
+       '50-54 Perempuan', '55-59 Laki-Laki', '55-59 Perempuan',
+       '60-64 Laki-Laki', '60-64 Perempuan', '65-69 Laki-Laki',
+       '65-69 Perempuan', '70-74 Laki-Laki', '70-74 Perempuan',
+       '>75 Laki-Laki', '>75  Perempuan']
+kolom_y = ['LUAS WILAYAH (KM2)']
+
+X_train, X_test, y_train, y_test = df_train[kolom_X],df_test[kolom_X],df_train[kolom_y],df_test[kolom_y]
+
+print(X_train.shape)
+print(X_test.shape)
+print(y_train.shape)
+print(y_test.shape)
+
+#Membuat model ANN
+model = Sequential()
+
+# Mendinisikan Input layer dan hidden layer Pertama
+model.add(Dense(units=20, input_dim=19, kernel_initializer='normal', activation='relu'))
+
+# Mendinisikan hidden layer Kedua
+# Setelah layer pertama, tidak dimasukkan input_dim karena akan dilakukan secara otomatis
+model.add(Dense(units=20, kernel_initializer='normal', activation='relu'))
+
+# Neuron output merupakan node single yang terhubung dengan semua hiden layer kedua 
+# Akan diprediksi angka tunggal untuk setiap nilai variabel independen
+model.add(Dense(1, kernel_initializer='normal'))
+
+# Melakukan compile terhadap model
+model.compile(loss='mean_squared_error', optimizer='adam')
+
+# Fitting terhadap ANN untuk data training
+model.fit(X_train, y_train, batch_size = 20, epochs = 200, verbose=1)
+
+# Mendefinisikan fungsi untuk menentukan  ANN
+def FunctionFindBestParams(X_train, y_train, X_test, y_test):
+    
+    # Mendefinisikan list dari parameter yang akan dicoba
+    batch_size_list=[5, 10, 15, 20, 100]
+    epoch_list  =   [5, 10, 50, 100, 200]
+    
+    import pandas as pd
+    SearchResultsData=pd.DataFrame(columns=['TrialNumber', 'Parameters', 'Accuracy'])
+    
+    # Inisialisasi percobaan
+    TrialNumber=0
+    for batch_size_trial in batch_size_list:
+        for epochs_trial in epoch_list:
+            TrialNumber+=1
+            # Membangun model ANN
+            model = Sequential()
+
+            # Mendefinisikan layer pertama
+            model.add(Dense(units=20, input_dim=X_train.shape[1], kernel_initializer='normal', activation='relu'))
+
+            # Mendefinisikan layer kedua
+            model.add(Dense(units=20, kernel_initializer='normal', activation='relu'))
+
+            # Mendefinisikan Output
+            model.add(Dense(1, kernel_initializer='normal'))
+
+            # Compile model
+            model.compile(loss='mean_squared_error', optimizer='adam')
+
+            # Fitting ANN ke data training
+            model.fit(X_train, y_train ,batch_size = batch_size_trial, epochs = epochs_trial, verbose=0)
+
+            MAPE = np.mean(100 * (np.abs(y_test-model.predict(X_test))/y_test))
+            
+            # Print hasil iterasi
+            print(TrialNumber, 'Parameters:','batch_size:', batch_size_trial,'-', 'epochs:',epochs_trial, 'Accuracy:', 100-MAPE)
+            
+            SearchResultsData=SearchResultsData.append(pd.DataFrame(data=[[TrialNumber, str(batch_size_trial)+'-'+str(epochs_trial), 100-MAPE]],
+                                                                    columns=['TrialNumber', 'Parameters', 'Accuracy'] ))
+    return(SearchResultsData)
+
+
+#####################
+# Memanggil kembali fungsi
+ResultsData=FunctionFindBestParams(X_train, y_train, X_test, y_test)
+
+# Fitting terhadap ANN untuk data training
+# yang terpilih batch_size=15 dan epoch=200
+model.fit(X_train, y_train, batch_size = 15, epochs = 200, verbose=1)
+
+
+##Melatih model
+# Mengenerate prediksi terhadap data testing
+Predictions=model.predict(X_test)
+
+PredictorScaler=StandardScaler()
+TargetVarScaler=StandardScaler()
+
+# Menyimpan objek fit sebagai referensi dan reverse penskalaan
+PredictorScalerFit=PredictorScaler.fit(X_test)
+TargetVarScalerFit=TargetVarScaler.fit(y_test)
+
+# Mensakalakan data Luas Wilayah yang diprediksi kembali menjadi Luas Wilayah Asli
+Predictions=TargetVarScalerFit.inverse_transform(Predictions)
+
+# Mensakalakan data Luas Wilayah y_test kembali menjadi Luas Wilayah Asli
+y_test_orig=TargetVarScalerFit.inverse_transform(y_test)
+
+# Mensakalakan data test kembali menjadi skala original
+Test_Data=PredictorScalerFit.inverse_transform(X_test)
+
+TestingData=pd.DataFrame(data=Test_Data, columns=kolom_X)
+TestingData['LUAS WILAYAH (KM2)']=y_test_orig
+TestingData['PREDIKSI LUAS WILAYAH (KM2)']=Predictions
+TestingData.head()
+
+##Menentukan tingkat akurasi dari model
+#Menggunakan MAPE dengan rumus akurasi 100-MAPE
+# Menghitung nilai mutlak persentase eror
+APE=100*(abs(TestingData['LUAS WILAYAH (KM2)']-TestingData['PREDIKSI LUAS WILAYAH (KM2)'])/TestingData['LUAS WILAYAH (KM2)'])
+TestingData['APE']=APE
+ 
+print('The Accuracy of ANN model is:', 100-np.mean(APE))
+TestingData.head()
